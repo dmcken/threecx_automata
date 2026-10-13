@@ -1,0 +1,57 @@
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+authors = [
+  {name = "David M", email = "david.mcken@codepro.guru"},
+]
+dependencies = [
+  "dotenv",
+  "fake-useragent",
+  "requests",
+]
+description = "3CX Web GUI Automation"
+dynamic = ["version"]
+name = "threecx_automata"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[project.urls]
+Homepage = "https://github.com/dmcken/threecx_automata"
+Documentation = "https://github.com/dmcken/threecx_automata"
+Repository = "https://github.com/dmcken/threecx_automata.git"
+Issues = "https://github.com/dmcken/threecx_automata/issues"
+# Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "src/threecx_automata/__init__.py"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "requests-mock",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "DTZ",  # flake8-datetimez
+    "RUF",  # ruff-specific rules
+    "FA",   # flake8-future-annotations
+    "LOG",  # flake8-logging
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
