@@ -211,3 +211,6 @@ __marimo__/
 *.zip
 *.csv
 
+
+# Browser captures (contain credentials/tokens)
+*.har

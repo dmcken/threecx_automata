@@ -123,3 +123,93 @@ def test_fetch_status(gui, requests_mock):
     requests_mock.get(f'{BASE}/xapi/v1/SystemStatus', json={'Version': '20.0'})
     assert gui.fetch_status() == '{"Version": "20.0"}'
     assert gui.fetch_status(raw_json=False) == {'Version': '20.0'}
+
+
+def test_odata_params():
+    '''Options get a '$' prefix, None drops a default, bools are lowercased.'''
+    params = threecx_automata.ThreeCX._odata_params(
+        {'orderby': 'Number', 'expand': 'Groups'},
+        {'expand': None, 'top': 5, 'count': True},
+    )
+    assert params == {'$orderby': 'Number', '$top': 5, '$count': 'true'}
+
+
+def test_odata_params_unknown():
+    '''Unknown options are rejected instead of silently ignored.'''
+    with pytest.raises(TypeError):
+        threecx_automata.ThreeCX._odata_params(None, {'sellect': 'Id'})
+
+
+@pytest.mark.parametrize(('body', 'expected'), [
+    ({'@odata.context': 'x', 'value': [1, 2]}, [1, 2]),
+    ({'@odata.context': 'x', 'value': 7}, 7),
+    ({'@odata.context': 'x', 'Name': 'a'}, {'Name': 'a'}),
+])
+def test_unwrap(body, expected):
+    '''Collections and scalars lose the value wrapper, entities the metadata.'''
+    assert threecx_automata.ThreeCX._unwrap(body) == expected
+
+
+@pytest.mark.parametrize(('method', 'path'), [
+    ('fetch_system_parameters', '/xapi/v1/Defs/Pbx.GetSystemParameters()'),
+    ('fetch_license_status', '/xapi/v1/LicenseStatus'),
+    ('fetch_trunks', '/xapi/v1/Trunks'),
+    ('fetch_voicemail_settings', '/xapi/v1/VoicemailSettings'),
+    ('fetch_network_interfaces', '/xapi/v1/NetworkSettings/Pbx.GetIfaces()'),
+])
+def test_fetch_paths(gui, requests_mock, method, path):
+    '''Fetch methods hit the matching xapi resource and unwrap it.'''
+    requests_mock.get(f'{BASE}{path}', json={'@odata.context': 'x', 'value': ['ok']})
+    assert getattr(gui, method)() == ['ok']
+
+
+def test_fetch_odata_passthrough(gui, requests_mock):
+    '''OData keyword arguments become query parameters.'''
+    requests_mock.get(f'{BASE}/xapi/v1/EventLogs', json={'value': []})
+    gui.fetch_event_logs(top=10, filter="Type eq 'Error'")
+    assert requests_mock.last_request.qs == {
+        '$orderby': ['timegenerated desc'],
+        '$top': ['10'],
+        '$filter': ["type eq 'error'"],
+    }
+
+
+@pytest.mark.parametrize(('kwargs', 'expected'), [
+    ({}, "not startswith(name,'___favorites___')"),
+    ({'filter': "Number eq '1'"},
+     "(number eq '1') and not startswith(name,'___favorites___')"),
+    ({'include_favorites': True}, None),
+])
+def test_fetch_groups_favorites(gui, requests_mock, kwargs, expected):
+    '''Favourites groups are filtered out unless asked for.'''
+    requests_mock.get(f'{BASE}/xapi/v1/Groups', json={'value': []})
+    gui.fetch_groups(**kwargs)
+    assert requests_mock.last_request.qs.get('$filter', [None])[0] == expected
+
+
+def test_fetch_phone_registrars_skips_empty(gui, requests_mock):
+    '''Empty MACs would make the server reject the whole request.'''
+    requests_mock.post(f'{BASE}/xapi/v1/Users/Pbx.GetPhoneRegistrars', json={'value': []})
+    gui.fetch_phone_registrars(['AA', '', 'BB'])
+    assert requests_mock.last_request.json() == {'macs': ['AA', 'BB']}
+
+
+def test_refresh_on_401(gui, requests_mock):
+    '''An expired auth token is refreshed once using the refresh token cookie.'''
+    requests_mock.get(f'{BASE}/xapi/v1/HotelServices', [
+        {'status_code': 401},
+        {'json': {'Enabled': False}},
+    ])
+    requests_mock.post(f'{BASE}/connect/token', json={'access_token': 'new'})
+
+    assert gui.fetch_hotel_services() == {'Enabled': False}
+    token_request = requests_mock.request_history[1]
+    assert 'RefreshTokenCookie=refresh' in token_request.headers['Cookie']
+    assert requests_mock.last_request.headers['Authorization'] == 'Bearer new'
+
+
+def test_http_error_includes_body(gui, requests_mock):
+    '''Server error details end up in the exception message.'''
+    requests_mock.get(f'{BASE}/xapi/v1/SyslogSettings', status_code=403, text='Forbidden')
+    with pytest.raises(threecx_automata.HttpError, match=r'403.*Forbidden'):
+        gui._fetch('SyslogSettings')

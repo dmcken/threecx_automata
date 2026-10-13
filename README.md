@@ -18,7 +18,17 @@ should pin to a released tag instead so builds don't silently change
 underneath them:
 
 ```bash
-pip install git+https://github.com/dmcken/threecx_automata.git@v0.1.0
+pip install git+https://github.com/dmcken/threecx_automata.git@v0.2.0
 ```
 
 Available tags: https://github.com/dmcken/threecx_automata/tags
+
+## Testing
+
+```bash
+pytest
+```
+
+`tests/test_live.py` additionally runs read-only checks against a real
+server when a `.env` file provides `DOMAIN`, `USERNAME` and `PASSWORD`;
+otherwise those tests are skipped.
