@@ -194,6 +194,31 @@ def test_fetch_phone_registrars_skips_empty(gui, requests_mock):
     assert requests_mock.last_request.json() == {'macs': ['AA', 'BB']}
 
 
+def test_reset_user_password(gui, requests_mock):
+    """Only the web client password, emailed: SIP credentials stay, so phones keep working."""
+    requests_mock.post(f'{BASE}/xapi/v1/Users/Pbx.RegeneratePasswords', status_code=204)
+    gui.reset_user_password(144)
+    body = requests_mock.last_request.json()
+    assert body['Ids'] == [144]
+    assert body['opts'] == {
+        'WebclientPassword': True, 'SendWelcomeEmail': True, 'SipAuth': False,
+        'VoicemailPIN': False, 'DeskphonePassword': False, 'RpsKey': False,
+        'ConfigurationLink': False,
+    }
+
+
+def test_regenerate_user_passwords_error(gui, requests_mock):
+    requests_mock.post(f'{BASE}/xapi/v1/Users/Pbx.RegeneratePasswords', status_code=400, text='bad')
+    with pytest.raises(threecx_automata.HttpError):
+        gui.regenerate_user_passwords([1], sip_auth=True)
+
+
+def test_send_welcome_email(gui, requests_mock):
+    requests_mock.post(f'{BASE}/xapi/v1/Users(144)/Pbx.SendWelcomeEmail', status_code=204)
+    gui.send_welcome_email(144)
+    assert requests_mock.called
+
+
 def test_refresh_on_401(gui, requests_mock):
     '''An expired auth token is refreshed once using the refresh token cookie.'''
     requests_mock.get(f'{BASE}/xapi/v1/HotelServices', [

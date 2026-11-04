@@ -514,6 +514,52 @@ class ThreeCX:
         '''DID routes (trunk and number) assigned to the given user ids.'''
         return self._post_fetch('Defs/Pbx.GetRoutes', {'ids': user_ids})
 
+    def regenerate_user_passwords(self, user_ids: list[int], *,
+                                  webclient_password: bool = False,
+                                  send_welcome_email: bool = False,
+                                  sip_auth: bool = False,
+                                  voicemail_pin: bool = False,
+                                  deskphone_password: bool = False,
+                                  rps_key: bool = False,
+                                  configuration_link: bool = False) -> None:
+        """Regenerate the chosen credentials of the given users (by user Id,
+        not extension number). Changes the PBX.
+
+        Args:
+            user_ids (list[int]): User Ids, e.g. from fetch_users().
+            webclient_password (bool): A new web client / app password.
+            send_welcome_email (bool): Email the user their (new) details.
+            sip_auth (bool): New SIP credentials -- the user's phones and
+                apps stop registering until they're set up again.
+            voicemail_pin (bool): A new voicemail PIN.
+            deskphone_password (bool): A new desk phone web password.
+            rps_key (bool): A new provisioning (RPS) key.
+            configuration_link (bool): A new provisioning link.
+        """
+        self._request('POST', '/xapi/v1/Users/Pbx.RegeneratePasswords', expected=(200, 204), json={
+            'Ids': list(user_ids),
+            'opts': {
+                'WebclientPassword': webclient_password,
+                'SendWelcomeEmail': send_welcome_email,
+                'SipAuth': sip_auth,
+                'VoicemailPIN': voicemail_pin,
+                'DeskphonePassword': deskphone_password,
+                'RpsKey': rps_key,
+                'ConfigurationLink': configuration_link,
+            },
+        })
+
+    def reset_user_password(self, user_id: int) -> None:
+        """A new web client password for the user, emailed to them -- the
+        Users page's "Reset password". Changes the PBX."""
+        self.regenerate_user_passwords([user_id], webclient_password=True, send_welcome_email=True)
+
+    def send_welcome_email(self, user_id: int) -> None:
+        """Re-send the user's welcome email, changing nothing."""
+        self._request(
+            'POST', f'/xapi/v1/Users({int(user_id)})/Pbx.SendWelcomeEmail', expected=(200, 204),
+        )
+
     def fetch_phone_registrars(self, macs: list[str]) -> list[dict]:
         '''Where the phones with the given MAC addresses are registered.'''
         # Phones without a MAC (e.g. SBC provisioned) are rejected by the server.
